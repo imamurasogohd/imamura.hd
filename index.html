@@ -9,9 +9,16 @@
         .card { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .hidden { display: none; }
         input[type="text"] { width: 100%; padding: 12px; font-size: 18px; margin-top: 10px; box-sizing: border-box; }
+        
+        /* ボタンの基本スタイル */
         button { background: #007bff; color: white; border: none; padding: 12px 20px; font-size: 18px; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 20px; }
         button:hover { background: #0056b3; }
         button:disabled { background: #ccc; cursor: not-allowed; }
+        
+        /* 戻るボタン用の追加スタイル */
+        .btn-secondary { background: #6c757d; margin-top: 10px; }
+        .btn-secondary:hover { background: #5a6268; }
+
         .question { margin-bottom: 25px; }
         .ratings { display: flex; justify-content: space-between; margin-top: 8px; }
         .ratings label { display: flex; flex-direction: column; align-items: center; cursor: pointer; font-size: 14px; }
@@ -69,6 +76,8 @@
         </div>
 
         <button id="submit-btn" onclick="submitSurvey()">回答を送信する</button>
+        <!-- 追加: 戻るボタン -->
+        <button type="button" class="btn-secondary" onclick="goBack()">キャンセルして戻る</button>
     </div>
 
     <!-- 完了画面 -->
@@ -91,7 +100,7 @@
             updateNetworkStatus();
             setInterval(syncQueue, 30000);
 
-            // 改善点1: バーコードリーダーのEnterキー入力を検知して自動遷移
+            // バーコードリーダーのEnterキー入力を検知して自動遷移
             const idInput = document.getElementById("patient-id");
             idInput.addEventListener("keypress", (e) => {
                 if (e.key === "Enter") {
@@ -139,10 +148,24 @@
             document.getElementById("step-survey").classList.remove("hidden");
         }
 
-        // 改善点2: アンケートフォームの初期化（リセット）機能
+        // アンケートフォームの初期化（リセット）機能
         function resetSurveyForm() {
             document.querySelector('input[name="q1"][value="3"]').checked = true;
             document.querySelector('input[name="q2"][value="3"]').checked = true;
+        }
+
+        // 追加: 質問画面からID入力画面に戻る処理
+        function goBack() {
+            resetSurveyForm();
+            const idInputField = document.getElementById("patient-id");
+            idInputField.value = "";
+            currentPatientId = "";
+            
+            document.getElementById("step-survey").classList.add("hidden");
+            document.getElementById("step-id").classList.remove("hidden");
+            
+            // 少し遅延させて確実にフォーカスを当てる
+            setTimeout(() => idInputField.focus(), 100);
         }
 
         async function submitSurvey() {
@@ -177,18 +200,15 @@
                 document.getElementById("step-complete").classList.add("hidden");
                 document.getElementById("step-id").classList.remove("hidden");
                 
-                // フォームをリセットして初期状態に戻す
                 resetSurveyForm();
 
                 submitBtn.disabled = false;
                 submitBtn.innerText = "回答を送信する";
                 isSubmitting = false;
 
-                // 改善点3: 次のバーコードをすぐ読み取れるようにフォーカスを戻す
                 setTimeout(() => idInputField.focus(), 100); 
             }, 2000);
 
-            // オンラインなら直接送信を試みる。失敗またはオフラインならキューに保存
             if (navigator.onLine) {
                 try {
                     await fetch(GAS_URL, {
@@ -197,7 +217,6 @@
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify(payload)
                     });
-                    // 注意: no-corsモードの場合、サーバー側の500エラー等を検知できず常に成功扱いになります。
                 } catch (error) {
                     console.log("送信失敗のためオフラインキューに保存します:", error);
                     let queue = getQueue();
