@@ -36,7 +36,6 @@
     <div id="step-id" class="card">
         <h2>患者様バーコード読み取り</h2>
         <p>バーコードリーダーで患者IDを読み取ってください。</p>
-        <!-- Enterキーによる誤作動を防ぎ、安全に開始する -->
         <input type="text" id="patient-id" placeholder="ここにIDが入力されます" autofocus>
         <button onclick="startSurvey()">アンケートを開始する</button>
     </div>
@@ -82,14 +81,13 @@
         const STORAGE_KEY = "survey_offline_queue";
 
         let currentPatientId = "";
-        let lastSubmitTime = 0; // 最後に送信した時刻を記録
+        let isSubmitting = false;
 
-        // 起動時およびネットワーク状態変化の監視
         window.addEventListener('online', updateNetworkStatus);
         window.addEventListener('offline', updateNetworkStatus);
         document.addEventListener("DOMContentLoaded", () => {
             updateNetworkStatus();
-            setInterval(syncQueue, 30000); // 30秒ごとに自動同期を試みる
+            setInterval(syncQueue, 30000);
         });
 
         function updateNetworkStatus() {
@@ -130,22 +128,14 @@
             document.getElementById("step-survey").classList.remove("hidden");
         }
 
-        let isSubmitting = false; // 送信中フラグ
-
         async function submitSurvey() {
             const submitBtn = document.getElementById("submit-btn");
-            const now = Date.now();
 
-            // 【完全ガード】すでに送信中であるか、または直近3秒以内の場合は一切の処理を行わない
-            if (isSubmitting || submitBtn.disabled || (now - lastSubmitTime < 3000)) {
-                console.log("重複送信をガードしました");
+            if (isSubmitting || submitBtn.disabled) {
                 return;
             }
 
-            isSubmitting = true; // 送信中フラグをON
-            lastSubmitTime = now;
-
-            // 送信ボタンを即座に無効化
+            isSubmitting = true;
             submitBtn.disabled = true;
             submitBtn.style.backgroundColor = "#ccc";
             submitBtn.innerText = "送信中...";
@@ -161,12 +151,7 @@
                 q2: q2
             };
 
-            // いったんローカルのキューに追加
-            let queue = getQueue();
-            queue.push(payload);
-            saveQueue(queue);
-
-            // 画面切り替え
+            // 画面を先に切り替え
             document.getElementById("patient-id").value = "";
             document.getElementById("step-survey").classList.add("hidden");
             document.getElementById("step-complete").classList.remove("hidden");
@@ -175,17 +160,34 @@
                 document.getElementById("step-complete").classList.add("hidden");
                 document.getElementById("step-id").classList.remove("hidden");
                 
-                // ボタンの状態と送信中フラグを元に戻す
                 submitBtn.disabled = false;
                 submitBtn.style.backgroundColor = "#007bff";
                 submitBtn.innerText = "回答を送信する";
-                isSubmitting = false; // フラグを解除
+                isSubmitting = false;
 
                 document.getElementById("patient-id").focus();
             }, 2000);
 
-            // 同期処理を呼び出す
-            await syncQueue();
+            // オンラインなら直接送信を試みる。失敗またはオフラインならキューに保存
+            if (navigator.onLine) {
+                try {
+                    await fetch(GAS_URL, {
+                        method: "POST",
+                        mode: "no-cors",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+                } catch (error) {
+                    console.log("送信失敗のためオフラインキューに保存します:", error);
+                    let queue = getQueue();
+                    queue.push(payload);
+                    saveQueue(queue);
+                }
+            } else {
+                let queue = getQueue();
+                queue.push(payload);
+                saveQueue(queue);
+            }
         }
 
         async function syncQueue() {
@@ -204,7 +206,7 @@
                     });
                     remaining.shift();
                 } catch (error) {
-                    console.log("同期失敗（オフラインの可能性）:", error);
+                    console.log("同期失敗:", error);
                     break;
                 }
             }
