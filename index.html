@@ -67,7 +67,8 @@
             </div>
         </div>
 
-        <button onclick="submitSurvey()">回答を送信する</button>
+        <!-- id="submit-btn" を追加して連打対策を適用 -->
+        <button id="submit-btn" onclick="submitSurvey()">回答を送信する</button>
     </div>
 
     <!-- 完了画面 -->
@@ -77,7 +78,6 @@
     </div>
 
     <script>
-        // ★ご自身のGASのウェブアプリURLに書き換えてください
         const GAS_URL = "https://script.google.com/macros/s/AKfycbxOoXSrwmooRQSYFjbiAL0wTB3OkW7QV8hfj19-r7Rj5_9o_bFy8JkMBEH4hk4fGC5xrA/exec";
         const STORAGE_KEY = "survey_offline_queue";
 
@@ -130,6 +130,16 @@
         }
 
         async function submitSurvey() {
+            const submitBtn = document.getElementById("submit-btn");
+            
+            // すでに送信中なら何もしない（二重クリック防止）
+            if (submitBtn.disabled) return;
+
+            // 送信ボタンを即座に無効化し、文字を変更
+            submitBtn.disabled = true;
+            submitBtn.style.backgroundColor = "#ccc";
+            submitBtn.innerText = "送信中...";
+
             const q1 = document.querySelector('input[name="q1"]:checked').value;
             const q2 = document.querySelector('input[name="q2"]:checked').value;
             const timestamp = new Date().toISOString();
@@ -154,6 +164,12 @@
             setTimeout(() => {
                 document.getElementById("step-complete").classList.add("hidden");
                 document.getElementById("step-id").classList.remove("hidden");
+                
+                // ボタンの状態を元に戻す
+                submitBtn.disabled = false;
+                submitBtn.style.backgroundColor = "#007bff";
+                submitBtn.innerText = "回答を送信する";
+
                 document.getElementById("patient-id").focus();
             }, 2000);
 
