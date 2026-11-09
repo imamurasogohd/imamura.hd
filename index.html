@@ -130,19 +130,22 @@
             document.getElementById("step-survey").classList.remove("hidden");
         }
 
+        let isSubmitting = false; // 送信中フラグ
+
         async function submitSurvey() {
             const submitBtn = document.getElementById("submit-btn");
             const now = Date.now();
 
-            // 【超重要】直近3秒以内の連続送信（二重実行）を完全にブロックする
-            if (submitBtn.disabled || (now - lastSubmitTime < 3000)) {
+            // 【完全ガード】すでに送信中であるか、または直近3秒以内の場合は一切の処理を行わない
+            if (isSubmitting || submitBtn.disabled || (now - lastSubmitTime < 3000)) {
                 console.log("重複送信をガードしました");
                 return;
             }
 
-            lastSubmitTime = now; // 送信時刻を記録
+            isSubmitting = true; // 送信中フラグをON
+            lastSubmitTime = now;
 
-            // 送信ボタンを即座に無効化し、文字を変更
+            // 送信ボタンを即座に無効化
             submitBtn.disabled = true;
             submitBtn.style.backgroundColor = "#ccc";
             submitBtn.innerText = "送信中...";
@@ -158,7 +161,7 @@
                 q2: q2
             };
 
-            // いったんローカルのキュー（未送信リスト）に追加
+            // いったんローカルのキューに追加
             let queue = getQueue();
             queue.push(payload);
             saveQueue(queue);
@@ -172,16 +175,17 @@
                 document.getElementById("step-complete").classList.add("hidden");
                 document.getElementById("step-id").classList.remove("hidden");
                 
-                // ボタンの状態を元に戻す
+                // ボタンの状態と送信中フラグを元に戻す
                 submitBtn.disabled = false;
                 submitBtn.style.backgroundColor = "#007bff";
                 submitBtn.innerText = "回答を送信する";
+                isSubmitting = false; // フラグを解除
 
                 document.getElementById("patient-id").focus();
             }, 2000);
 
-            // 即時送信を試みる
-            syncQueue();
+            // 同期処理を呼び出す
+            await syncQueue();
         }
 
         async function syncQueue() {
