@@ -36,6 +36,7 @@
     <div id="step-id" class="card">
         <h2>患者様バーコード読み取り</h2>
         <p>バーコードリーダーで患者IDを読み取ってください。</p>
+        <!-- Enterキーによる誤作動を防ぎ、安全に開始する -->
         <input type="text" id="patient-id" placeholder="ここにIDが入力されます" autofocus>
         <button onclick="startSurvey()">アンケートを開始する</button>
     </div>
@@ -67,7 +68,6 @@
             </div>
         </div>
 
-        <!-- id="submit-btn" を追加して連打対策を適用 -->
         <button id="submit-btn" onclick="submitSurvey()">回答を送信する</button>
     </div>
 
@@ -82,6 +82,7 @@
         const STORAGE_KEY = "survey_offline_queue";
 
         let currentPatientId = "";
+        let lastSubmitTime = 0; // 最後に送信した時刻を記録
 
         // 起動時およびネットワーク状態変化の監視
         window.addEventListener('online', updateNetworkStatus);
@@ -100,7 +101,7 @@
                 dot.className = "status-dot online";
                 text.innerHTML = `オンライン（未送信データ: <span id="queue-count">${queue.length}</span>件）`;
                 if (queue.length > 0) {
-                    syncQueue(); // オンライン復帰時に自動同期
+                    syncQueue();
                 }
             } else {
                 dot.className = "status-dot offline";
@@ -131,9 +132,15 @@
 
         async function submitSurvey() {
             const submitBtn = document.getElementById("submit-btn");
-            
-            // すでに送信中なら何もしない（二重クリック防止）
-            if (submitBtn.disabled) return;
+            const now = Date.now();
+
+            // 【超重要】直近3秒以内の連続送信（二重実行）を完全にブロックする
+            if (submitBtn.disabled || (now - lastSubmitTime < 3000)) {
+                console.log("重複送信をガードしました");
+                return;
+            }
+
+            lastSubmitTime = now; // 送信時刻を記録
 
             // 送信ボタンを即座に無効化し、文字を変更
             submitBtn.disabled = true;
@@ -181,7 +188,6 @@
             let queue = getQueue();
             if (queue.length === 0 || !navigator.onLine) return;
 
-            // 古い順に送信を試みる
             let remaining = [...queue];
 
             for (let i = 0; i < queue.length; i++) {
@@ -192,11 +198,10 @@
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify(queue[i])
                     });
-                    // 送信成功したものをキューから削除
                     remaining.shift();
                 } catch (error) {
                     console.log("同期失敗（オフラインの可能性）:", error);
-                    break; // 失敗したら残りは次回に持ち越し
+                    break;
                 }
             }
 
