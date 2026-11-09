@@ -11,6 +11,7 @@
         input[type="text"] { width: 100%; padding: 12px; font-size: 18px; margin-top: 10px; box-sizing: border-box; }
         button { background: #007bff; color: white; border: none; padding: 12px 20px; font-size: 18px; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 20px; }
         button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
         .question { margin-bottom: 25px; }
         .ratings { display: flex; justify-content: space-between; margin-top: 8px; }
         .ratings label { display: flex; flex-direction: column; align-items: center; cursor: pointer; font-size: 14px; }
@@ -85,9 +86,19 @@
 
         window.addEventListener('online', updateNetworkStatus);
         window.addEventListener('offline', updateNetworkStatus);
+        
         document.addEventListener("DOMContentLoaded", () => {
             updateNetworkStatus();
             setInterval(syncQueue, 30000);
+
+            // 改善点1: バーコードリーダーのEnterキー入力を検知して自動遷移
+            const idInput = document.getElementById("patient-id");
+            idInput.addEventListener("keypress", (e) => {
+                if (e.key === "Enter") {
+                    e.preventDefault(); // フォームのデフォルト送信を防ぐ
+                    startSurvey();
+                }
+            });
         });
 
         function updateNetworkStatus() {
@@ -128,6 +139,12 @@
             document.getElementById("step-survey").classList.remove("hidden");
         }
 
+        // 改善点2: アンケートフォームの初期化（リセット）機能
+        function resetSurveyForm() {
+            document.querySelector('input[name="q1"][value="3"]').checked = true;
+            document.querySelector('input[name="q2"][value="3"]').checked = true;
+        }
+
         async function submitSurvey() {
             const submitBtn = document.getElementById("submit-btn");
 
@@ -137,7 +154,6 @@
 
             isSubmitting = true;
             submitBtn.disabled = true;
-            submitBtn.style.backgroundColor = "#ccc";
             submitBtn.innerText = "送信中...";
 
             const q1 = document.querySelector('input[name="q1"]:checked').value;
@@ -152,7 +168,8 @@
             };
 
             // 画面を先に切り替え
-            document.getElementById("patient-id").value = "";
+            const idInputField = document.getElementById("patient-id");
+            idInputField.value = "";
             document.getElementById("step-survey").classList.add("hidden");
             document.getElementById("step-complete").classList.remove("hidden");
 
@@ -160,12 +177,15 @@
                 document.getElementById("step-complete").classList.add("hidden");
                 document.getElementById("step-id").classList.remove("hidden");
                 
+                // フォームをリセットして初期状態に戻す
+                resetSurveyForm();
+
                 submitBtn.disabled = false;
-                submitBtn.style.backgroundColor = "#007bff";
                 submitBtn.innerText = "回答を送信する";
                 isSubmitting = false;
 
-                document.getElementById("patient-id").focus();
+                // 改善点3: 次のバーコードをすぐ読み取れるようにフォーカスを戻す
+                setTimeout(() => idInputField.focus(), 100); 
             }, 2000);
 
             // オンラインなら直接送信を試みる。失敗またはオフラインならキューに保存
@@ -177,6 +197,7 @@
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify(payload)
                     });
+                    // 注意: no-corsモードの場合、サーバー側の500エラー等を検知できず常に成功扱いになります。
                 } catch (error) {
                     console.log("送信失敗のためオフラインキューに保存します:", error);
                     let queue = getQueue();
